@@ -1,10 +1,8 @@
 package ourhourback.controllers;
 
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-
 import org.springframework.web.bind.annotation.*;
 import ourhourback.dtos.UserDTO;
 import ourhourback.entities.Friendship;
@@ -15,7 +13,6 @@ import ourhourback.services.MemberService;
 
 import java.util.List;
 import java.util.Map;
-
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -47,7 +44,7 @@ public class MemberController {
             return ResponseEntity.ok(userDTOs);
         } else {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No members found with this nickname.");
-    }
+        }
     }
 
     @PostMapping("/findpassword")
@@ -65,6 +62,7 @@ public class MemberController {
         }
 
     }
+
     //친구추가요청 보내기
     @PostMapping("/friends/add")
     public ResponseEntity<?> addFriend(@RequestBody Map<String, String> payload) {
@@ -155,5 +153,14 @@ public class MemberController {
         }
     }
 
+    //공통된 친구 찾기
+    @GetMapping("/common-friends")
+    public ResponseEntity<?> getCommonFriends(@RequestParam String email1, @RequestParam String email2) {
+        try {
+            List<UserDTO> commonFriends = memberService.findCommonFriendsByEmails(email1, email2);
+            return ResponseEntity.ok(commonFriends);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
 }
-

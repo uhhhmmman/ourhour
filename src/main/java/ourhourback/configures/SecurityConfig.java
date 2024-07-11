@@ -33,7 +33,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
                                 .requestMatchers("/api/emailSend", "/api/emailConfirm", "/api/oauth/kakao", "/api/auth/google/**","/api/register",
-                                        "/api/login","/api/members/search","/api/findpassword","/api/update","/api/socialupdate", "/chat/**").permitAll()
+                                        "/api/login","/api/members/search","/api/findpassword","/api/update","/api/socialupdate", "/chat/**","/api/**").permitAll()
                                 .anyRequest().authenticated() // 나머지 요청은 인증 필요
                 )
                 .formLogin(form -> form.disable())

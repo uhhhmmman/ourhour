@@ -85,4 +85,11 @@ public class Member implements UserDetails {
     public String getUsername() {
         return email;
     }
+
+    @Override
+    public String toString() {
+        return "Member{" +
+                 nickname  +
+                "}";
+    }
 }

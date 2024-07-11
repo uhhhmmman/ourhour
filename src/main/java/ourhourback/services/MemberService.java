@@ -4,12 +4,14 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ourhourback.dtos.UserDTO;
 import ourhourback.entities.Friendship;
 import ourhourback.entities.Member;
 import ourhourback.repositories.FriendshipRepository;
 import ourhourback.repositories.MemberRepository;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,13 +27,16 @@ public class MemberService {
     @Transactional
     public void addFriend(String senderEmail, String receiverEmail) {
         Member sender = memberRepository.findByEmail(senderEmail)
-                .orElseThrow(() -> new IllegalArgumentException("Sender not found"));
+                .orElseThrow(() -> new IllegalArgumentException("보낸사람을 찾을 수 없습니다."));
         Member receiver = memberRepository.findByEmail(receiverEmail)
-                .orElseThrow(() -> new IllegalArgumentException("Receiver not found"));
+                .orElseThrow(() -> new IllegalArgumentException("받는 사람을 찾을 수 없습니다."));
 
-        // 친구관계 중복체크
+        // 친구관계 중복체크(양방향 체크)
         if (friendshipRepository.existsByFromUserAndToUser(sender, receiver)) {
-            throw new IllegalArgumentException("Friend request already sent");
+            throw new IllegalArgumentException("이미 " + receiverEmail + "에게 친구 요청을 보냈습니다.");
+        }
+        if (friendshipRepository.existsByFromUserAndToUser(receiver, sender)) {
+            throw new IllegalArgumentException(receiverEmail + "가 이미 " + senderEmail + "에게 친구 요청을 보냈습니다.");
         }
         // 친구관계 생성
         Friendship friendship = Friendship.builder()
@@ -47,15 +52,15 @@ public class MemberService {
     @Transactional
     public void acceptFriendRequest(String senderEmail, String receiverEmail) {
         Member sender = memberRepository.findByEmail(senderEmail)
-                .orElseThrow(() -> new IllegalArgumentException("Sender not found"));
+                .orElseThrow(() -> new IllegalArgumentException("보낸사람을 찾을 수 없습니다."));
         Member receiver = memberRepository.findByEmail(receiverEmail)
-                .orElseThrow(() -> new IllegalArgumentException("Receiver not found"));
+                .orElseThrow(() -> new IllegalArgumentException("받는 사람을 찾을 수 없습니다."));
 
         Friendship friendship = friendshipRepository.findByFromUserAndToUser(sender, receiver)
-                .orElseThrow(() -> new IllegalArgumentException("Friend request not found"));
+                .orElseThrow(() -> new IllegalArgumentException("친구요청이 없습니다."));
 
         if (friendship.getStatus() != Friendship.Status.PENDING) {
-            throw new IllegalArgumentException("Friend request is not pending");
+            throw new IllegalArgumentException("요청상태가 PENDING 이 아닙니다.");
         }
 
         friendship.setStatus(Friendship.Status.ACCEPTED);
@@ -65,15 +70,15 @@ public class MemberService {
     @Transactional
     public void rejectFriendRequest(String senderEmail, String receiverEmail) {
         Member sender = memberRepository.findByEmail(senderEmail)
-                .orElseThrow(() -> new IllegalArgumentException("Sender not found"));
+                .orElseThrow(() -> new IllegalArgumentException("보낸사람을 찾을 수 없습니다."));
         Member receiver = memberRepository.findByEmail(receiverEmail)
-                .orElseThrow(() -> new IllegalArgumentException("Receiver not found"));
+                .orElseThrow(() -> new IllegalArgumentException("받는 사람을 찾을 수 없습니다."));
 
         Friendship friendship = friendshipRepository.findByFromUserAndToUser(sender, receiver)
-                .orElseThrow(() -> new IllegalArgumentException("Friend request not found"));
+                .orElseThrow(() -> new IllegalArgumentException("친구요청이 없습니다."));
 
         if (friendship.getStatus() != Friendship.Status.PENDING) {
-            throw new IllegalArgumentException("Friend request is not pending");
+            throw new IllegalArgumentException("요청상태가 PENDING 이 아닙니다.");
         }
 
         friendship.setStatus(Friendship.Status.REJECTED);
@@ -124,6 +129,80 @@ public class MemberService {
                         .orElseThrow(() -> new IllegalArgumentException("Friendship not found")));
 
         friendshipRepository.delete(friendship);
+    }
+
+    //인덱스 성능향상을 위한 복잡한 쿼리, 친구의 친구 찾기
+    public List<Member> getFriendsOfFriends(String email) {
+        Member member = memberRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+//        // 직접 친구
+//        Set<Friendship> directFriends = new HashSet<>(friendshipRepository.findAllByFromUserAndStatus(member, Friendship.Status.ACCEPTED));
+//        directFriends.addAll(friendshipRepository.findAllByToUserAndStatus(member, Friendship.Status.ACCEPTED));
+
+        // 직접 친구
+        Set<Member> directFriends = getFriends(member);
+
+        // 친구의 친구
+        Set<Member> friendsOfFriends = new HashSet<>();
+        for (Member friend : directFriends) {
+            Set<Member> secondLevelFriends = getFriends(friend);
+            for (Member secondLevelFriend : secondLevelFriends) {
+                if (!secondLevelFriend.equals(member) && !directFriends.contains(secondLevelFriend)) {
+                    friendsOfFriends.add(secondLevelFriend);
+                }
+            }
+        }
+//        // 친구의 친구
+//        Set<Member> friendsOfFriends = new HashSet<>();
+//        for (Friendship friendship : directFriends) {
+//            Member friend = friendship.getFromUser().equals(member) ? friendship.getToUser() : friendship.getFromUser();
+//            Set<Friendship> secondLevelFriends = new HashSet<>(friendshipRepository.findAllByFromUserAndStatus(friend, Friendship.Status.ACCEPTED));
+//            secondLevelFriends.addAll(friendshipRepository.findAllByToUserAndStatus(friend, Friendship.Status.ACCEPTED));
+//
+//            for (Friendship secondLevelFriendship : secondLevelFriends) {
+//                Member secondLevelFriend = secondLevelFriendship.getFromUser().equals(friend) ? secondLevelFriendship.getToUser() : secondLevelFriendship.getFromUser();
+//                if (!secondLevelFriend.equals(member)) {
+//                    friendsOfFriends.add(secondLevelFriend);
+//                }
+//            }
+//        }
+
+        return new ArrayList<>(friendsOfFriends);
+    }
+
+    // 중복제거해서 친구찾기, 친구의 친구 찾기에서 사용함
+    private Set<Member> getFriends(Member member) {
+        Set<Friendship> friendships = new HashSet<>(friendshipRepository.findAllByFromUserAndStatus(member, Friendship.Status.ACCEPTED));
+        friendships.addAll(friendshipRepository.findAllByToUserAndStatus(member, Friendship.Status.ACCEPTED));
+
+        Set<Member> friends = new HashSet<>();
+        for (Friendship friendship : friendships) {
+            Member friend = friendship.getFromUser().equals(member) ? friendship.getToUser() : friendship.getFromUser();
+            friends.add(friend);
+        }
+        return friends;
+    }
+
+    //공통된 친구 찾기
+    public List<UserDTO> findCommonFriendsByEmails(String email1, String email2) {
+        Optional<Member> member1 = memberRepository.findByEmail(email1);
+        Optional<Member> member2 = memberRepository.findByEmail(email2);
+
+        if (member1.isEmpty() || member2.isEmpty()) {
+            throw new IllegalArgumentException("One or both emails are invalid.");
+        }
+
+        List<Member> friendsOfUser1 = friendshipRepository.findFriendsByUserId(member1.get().getId());
+        List<Member> friendsOfUser2 = friendshipRepository.findFriendsByUserId(member2.get().getId());
+
+        List<Member> commonFriends = friendsOfUser1.stream()
+                .filter(friendsOfUser2::contains)
+                .toList();
+
+        return commonFriends.stream()
+                .map(friend -> new UserDTO(friend.getEmail(), friend.getNickname(), friend.getLanguage()))
+                .collect(Collectors.toList());
     }
 
 }

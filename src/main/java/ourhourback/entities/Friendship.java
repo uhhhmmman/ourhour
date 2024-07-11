@@ -11,12 +11,12 @@ import java.sql.Timestamp;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "friendship",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"from_user_id", "to_user_id"}),
-        indexes = {
-                @Index(name = "idx_from_user_id", columnList = "from_user_id"),
-                @Index(name = "idx_to_user_id", columnList = "to_user_id")
-        })
+//@Table(name = "friendship",
+//        uniqueConstraints = @UniqueConstraint(columnNames = {"from_user_id", "to_user_id"}),
+//        indexes = {
+//                @Index(name = "idx_from_user_id", columnList = "from_user_id"),
+//                @Index(name = "idx_to_user_id", columnList = "to_user_id")
+//        })
 public class Friendship {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,6 +41,13 @@ public class Friendship {
         PENDING,
         ACCEPTED,
         REJECTED
+    }
+    @PrePersist
+    @PreUpdate
+    private void ensureUniqueFriendship() {
+        if (fromUser.equals(toUser)) {
+            throw new IllegalStateException("자기자신한테 친구추가 금지");
+        }
     }
 }
 

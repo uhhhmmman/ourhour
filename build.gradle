@@ -47,7 +47,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-websocket' //추가
 	implementation 'org.webjars:sockjs-client:1.5.1'	//추가
 	implementation 'org.webjars:stomp-websocket:2.3.3' //추가
-
+// MySQL Connector
+	implementation 'mysql:mysql-connector-java:8.0.25'
 }
 
 tasks.named('test') {
